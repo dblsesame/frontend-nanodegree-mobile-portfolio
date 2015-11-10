@@ -5,6 +5,11 @@ jank-free at 60 frames per second.
 There are two major issues in this code that lead to sub-60fps performance. Can
 you spot and fix both?
 
+//one issue is the update position
+//costly math function sine is called for every elemenet but there are only 5
+//possible values. move it out of the element loop to improve performance
+//the other issue is the change size
+//again the loop can be improved by move repeat values out side of the loop
 
 Built into the code, you'll find a few instances of the User Timing API
 (window.performance), which will be console.log()ing frame rate data into the
@@ -403,16 +408,18 @@ var resizePizzas = function(size) {
   window.performance.mark("mark_start_resize");   // User Timing API function
 
   // Changes the value for the size of the pizza above the slider
+  // change querySelector to getElementById
+  var pizzaSizer = document.getElementById('pizzaSize');
   function changeSliderLabel(size) {
     switch(size) {
       case "1":
-        document.querySelector("#pizzaSize").innerHTML = "Small";
+        pizzaSizer.innerHTML = "Small";
         return;
       case "2":
-        document.querySelector("#pizzaSize").innerHTML = "Medium";
+        pizzaSizer.innerHTML = "Medium";
         return;
       case "3":
-        document.querySelector("#pizzaSize").innerHTML = "Large";
+        pizzaSizer.innerHTML = "Large";
         return;
       default:
         console.log("bug in changeSliderLabel");
@@ -449,11 +456,16 @@ var resizePizzas = function(size) {
   }
 
   // Iterates through pizza elements on the page and changes their widths
+  //var randomPizzaContainer=document.querySelectorAll(".randomPizzaContainer");
+  var randomPizzaContainer=document.getElementsByClassName("randomPizzaContainer");
   function changePizzaSizes(size) {
-    for (var i = 0; i < document.querySelectorAll(".randomPizzaContainer").length; i++) {
-      var dx = determineDx(document.querySelectorAll(".randomPizzaContainer")[i], size);
-      var newwidth = (document.querySelectorAll(".randomPizzaContainer")[i].offsetWidth + dx) + 'px';
-      document.querySelectorAll(".randomPizzaContainer")[i].style.width = newwidth;
+    //
+     // move out of loop
+    var dx = determineDx(randomPizzaContainer[0], size);
+    var newwidth = (randomPizzaContainer[0].offsetWidth + dx) + 'px';
+    //console.log("size="+size+" dx="+dx+" newwidth="+newwidth);
+    for (var i = 0; i < randomPizzaContainer.length; i++) {
+      randomPizzaContainer[i].style.width = newwidth;
     }
   }
 
@@ -494,6 +506,13 @@ function logAverageFrame(times) {   // times is the array of User Timing measure
   console.log("Average time to generate last 10 frames: " + sum / 10 + "ms");
 }
 
+/*
+
+transform: translateZ(0);
+transform translate3d(0,0,0);
+backface-visibility: hidden;
+
+*/
 // The following code for sliding background pizzas was pulled from Ilya's demo found at:
 // https://www.igvita.com/slides/2012/devtools-tips-and-tricks/jank-demo.html
 
@@ -501,11 +520,29 @@ function logAverageFrame(times) {   // times is the array of User Timing measure
 function updatePositions() {
   frame++;
   window.performance.mark("mark_start_frame");
+  
+  //var items = document.querySelectorAll('.mover');
+  var items = document.getElementsByClassName('mover');
+  var phases = [];
+  //move the div out of the loop so it is calculated only once
+  var stop = (document.body.scrollTop / 1250); 
+  //save all 5 possible sin in an array so sin is called less
+  for (var i=0; i<5; i++) {
+    phases[i] =  Math.sin(stop + i)*100;
+  }
 
-  var items = document.querySelectorAll('.mover');
   for (var i = 0; i < items.length; i++) {
-    var phase = Math.sin((document.body.scrollTop / 1250) + (i % 5));
-    items[i].style.left = items[i].basicLeft + 100 * phase + 'px';
+    //what is the length of items?
+    //var phase = Math.sin((document.body.scrollTop / 1250) + (i % 5));
+    var phase = phases[i%5];
+    //console.log(phase,document.body.scrollTop/1250);
+    //items[i].style.left = items[i].basicLeft +  phase + 'px';
+    //items[i].style.webkitTransform= "translateX("+phase+"px)";
+    items[i].style.transform= "translateX("+ phase +"px)";
+    //is there any more efficient way to change position than style.left
+    // CSS3 hardware acceleration
+    //transform: translateX();
+    //css transform to use layer to reduce the need to repaint the entire doc
   }
 
   // User Timing API to the rescue again. Seriously, it's worth learning.
@@ -523,17 +560,29 @@ window.addEventListener('scroll', updatePositions);
 
 // Generates the sliding pizzas when the page loads.
 document.addEventListener('DOMContentLoaded', function() {
-  var cols = 8;
+  //var cols = 8;
   var s = 256;
-  for (var i = 0; i < 200; i++) {
+  var screenWidth = screen.availWidth;
+  var screenHeight = screen.availHeight;
+  var cols = screenWidth / s;
+  var rows = screenHeight / s;
+  var pizzaTotal = Math.ceil(cols * rows);
+  console.log("total = "+pizzaTotal);
+  var movingPizzas1 = document.getElementById("movingPizzas1"); //move out of loop
+  for (var i = 0; i < pizzaTotal; i++) {
     var elem = document.createElement('img');
     elem.className = 'mover';
     elem.src = "images/pizza.png";
+    elem.style.transform = "translate3d(0, 0, 0) translateZ("+i+"px)";
+    //elem.style.backface-visibility = "hidden";
     elem.style.height = "100px";
     elem.style.width = "73.333px";
+    // for each column - 
     elem.basicLeft = (i % cols) * s;
+    elem.style.left = elem.basicLeft + 'px';
+    // for various height?
     elem.style.top = (Math.floor(i / cols) * s) + 'px';
-    document.querySelector("#movingPizzas1").appendChild(elem);
+    movingPizzas1.appendChild(elem);
   }
   updatePositions();
 });
